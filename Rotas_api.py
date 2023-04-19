@@ -43,9 +43,7 @@ class ServidorApp():
             requisicao = request.get_json()
             cpf = requisicao['cpf']
             senha = requisicao['senha']
-            print(cpf, senha)
             UserID = classeBD.Login(cpf, senha)
-            print(UserID)
             if UserID:
                 agora = dt.datetime.now()
                 tempoExpiracao = dt.timedelta(weeks=8)
@@ -204,9 +202,7 @@ class ServidorApp():
             dia = dia['dia']
             TabelaServicos = classeBD.Agenda(dia)
             print(TabelaServicos)
-            return jsonify({
-                    'Servicos': TabelaServicos
-            }) 
+            return TabelaServicos
          
 
 
@@ -292,4 +288,4 @@ class ServidorApp():
 
                 return response
             return Response(status=400)
-        self.servidor.run(debug=True)
+        self.servidor.run(port=5000, debug=True)
