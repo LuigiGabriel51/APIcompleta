@@ -1,11 +1,11 @@
 from flask import Flask, make_response,request, jsonify, Response
-from EmailAutomatico import enviar_email
-from SMSautomatico import sendMsg
+from FuncsApi.EmailAutomatico import enviar_email
+from FuncsApi.SMSautomatico import sendMsg
 from functools import wraps
 import jwt 
 import datetime as dt
 from flask_login import LoginManager
-import BancoDados as classeBD
+import BD.BancoDados as classeBD
 from io import BytesIO
 
 
@@ -44,6 +44,7 @@ class ServidorApp():
             cpf = requisicao['cpf']
             senha = requisicao['senha']
             UserID = classeBD.Login(cpf, senha)
+
             if UserID:
                 agora = dt.datetime.now()
                 tempoExpiracao = dt.timedelta(weeks=8)
@@ -55,11 +56,9 @@ class ServidorApp():
                         })
 
             else:
-                return jsonify(
-                    {
-                        "AcessToken": "acesso negado"
-                    }
-                ), Response('Missing parameter', status=400)
+                return jsonify({
+                "AcessToken": "acesso negado"
+                }), 401
                 
             
             # return redirect(login)
@@ -71,13 +70,9 @@ class ServidorApp():
             
             requisicao = request.get_json()
             nome = requisicao['nome']
-            n_estagio = requisicao['n_estagio']
-            estagio = requisicao['estagio']
-            descricao  = requisicao['descricao'] 
-            duracao = requisicao['duracao']
-            data_inicio = requisicao['data_inicio']
+            participantes = requisicao['IDs']
             
-            resultado = classeBD.criarProjeto(nome, n_estagio, estagio, descricao, duracao, data_inicio)
+            resultado = classeBD.criarProjeto(nome, participantes)
             return resultado
 
         #----------------------------------------------rota de funcionarios-------------------------------------------
@@ -182,7 +177,7 @@ class ServidorApp():
             codigo = dados['codigo']
             status = sendMsg(tel,codigo)
             print(status)
-            return Response('Missing parameter', status=status)
+            return Response('Missing parameter', status=400)
 
 
 
@@ -241,11 +236,11 @@ class ServidorApp():
         def novaSenha():
             try:
                 dados = request.get_json()
-                email = dados['email']
+                cpf = dados['cpf']
                 senha = dados['senha']
                 Senha = jwt.encode({'senha': senha}, "senha-padrão", algorithm='HS256')
                 print(Senha)
-                sstatus = classeBD.alterarSenha(email, Senha)
+                sstatus = classeBD.alterarSenha(cpf, Senha)
                 return Response(status=sstatus)
             except: 
                 return Response(status=sstatus)
@@ -268,25 +263,25 @@ class ServidorApp():
 
             return {'message': 'Arquivo enviado com sucesso'}
         
-        @self.servidor.route('/sendImagePerfil', methods = ['POST'])
-        def sendImagePerfil():
-            id = request.get_json()
-            id = id['id']
+        # @self.servidor.route('/sendImagePerfil', methods = ['POST'])
+        # def sendImagePerfil():
+        #     id = request.get_json()
+        #     id = id['id']
 
-            image = classeBD.SendImage(id)
+        #     image = classeBD.SendImage(id)
 
-            if image:
-                image_data = image[0]
+        #     if image:
+        #         image_data = image[0]
 
-                # Cria um objeto BytesIO para armazenar a imagem como um fluxo de bytes
-                img_io = BytesIO(image_data)
+        #         # Cria um objeto BytesIO para armazenar a imagem como um fluxo de bytes
+        #         img_io = BytesIO(image_data)
 
-                # Define os cabeçalhos HTTP para a resposta
-                response = make_response(img_io.getvalue())
-                response.headers.set('Content-Type', 'image/jpeg')
-                response.headers.set('Content-Disposition', 'attachment', filename='image.jpg')
+        #         # Define os cabeçalhos HTTP para a resposta
+        #         response = make_response(img_io.getvalue())
+        #         response.headers.set('Content-Type', 'image/jpeg')
+        #         response.headers.set('Content-Disposition', 'attachment', filename='image.jpg')
 
-                return response
-            return Response(status=400)
-        self.servidor.run(port=5000, debug=True)
+        #         return response
+        #     return Response(status=400)
+        self.servidor.run(host="0.0.0.0", debug=True)
         
