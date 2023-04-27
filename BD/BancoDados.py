@@ -59,9 +59,21 @@ def RECemail( cpf):
         return -1
 
 def Servicos():
-    cursor.execute("SELECT * FROM dadosfuncionarios")
-    result = cursor.fetchall()
-    return result
+    cursor.execute("SELECT * FROM projetos")
+    projetos = cursor.fetchall()
+    cursor.execute("SELECT * FROM fase")
+    fases = cursor.fetchall()
+    
+    projetos_fases = {}
+    for projeto in projetos:
+        id_projeto = projeto[0] # altere aqui o índice para corresponder à posição da coluna 'ID' na tabela 'projetos'
+        nome_projeto = projeto[1]
+        projetos_fases[nome_projeto] = []
+        for fase in fases:
+            if fase[1] == id_projeto: # altere aqui o índice para corresponder à posição da coluna 'id_projeto' na tabela 'fase'
+                projetos_fases[nome_projeto].append(fase)
+    
+    return projetos_fases
 
 def Agenda(dia):
     cursor.execute(f"SELECT * FROM agenda WHERE dia = '{dia}' ")
@@ -82,7 +94,6 @@ def alterarSenha(cpf , senha):
 
         return 200
     except: 
-        print(TypeError)
         return 400
     
 def SaveImage(id, imagem):

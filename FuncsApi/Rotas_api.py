@@ -188,7 +188,12 @@ class ServidorApp():
             
             
             TabelaServicos = classeBD.Servicos()
-            return TabelaServicos
+            TabelaServicos
+            return jsonify(
+                {
+                    "Servicos": TabelaServicos
+                }
+            )
         
         @self.servidor.route("/Agenda", methods = ["GET", "POST"])
         # @jwt_required()
