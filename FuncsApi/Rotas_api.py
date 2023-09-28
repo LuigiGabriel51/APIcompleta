@@ -1,5 +1,5 @@
 from flask import Flask, make_response,request, jsonify, Response
-from FuncsApi.EmailAutomatico import enviar_email
+from FuncsApi.EmailAutomatico import enviar_email, envia_email_form
 from FuncsApi.SMSautomatico import sendMsg
 from functools import wraps
 import jwt 
@@ -19,11 +19,10 @@ class ServidorApp():
         self.servidor.config["SECRET_KEY"] = "senha-padrão"
 
     def InicializaServidor(self):
-    
         def jwt_required(f):
             @wraps(f)
             def decorated(*args, **kwargs):
-                token = request.args.get('token')
+                token = request.headers.get('Authorization')
                 print(token)
                 if not token:
                     
@@ -31,8 +30,9 @@ class ServidorApp():
                         "verification": 404
                     }), 
                 try:
-                    data = jwt.decode(token, 'bagriel51', algorithms=["HS256"])
-                except: return jsonify({ "verification": 403})
+                    jwt.decode(token, 'bagriel51', algorithms=["HS256"])
+                except jwt.exceptions.DecodeError as e:
+                    return jsonify({"verification": "Signature has expired"})
                 return f(*args, **kwargs)
             return decorated
 
@@ -40,28 +40,58 @@ class ServidorApp():
         @self.servidor.route('/login', methods= ['POST'])
         def login():
 
-            requisicao = request.get_json()
-            cpf = requisicao['cpf']
-            senha = requisicao['senha']
-            UserID = classeBD.Login(cpf, senha)
-
-            if UserID:
-                agora = dt.datetime.now()
-                tempoExpiracao = dt.timedelta(weeks=8)
-                
-                Token = jwt.encode({'user': UserID,'exp': agora+tempoExpiracao}, 'bagriel51')
-                return jsonify({
-                        'UserID':UserID,
-                        'AcessToken': Token
-                        })
+            dados = request.get_json()
+            cpf = dados['cpf']
+            senha = dados['senha']
+            info = classeBD.Login(cpf, senha)
+            if info:
+                payload = {
+                    'user': info[0],
+                    'exp': dt.datetime.now(tz=dt.timezone.utc) + dt.timedelta(minutes=20)
+    }
+                Token = jwt.encode(payload, 'bagriel51')
+                response = jsonify({
+                    'AccessToken': Token,
+                    "id": info[0],
+                    "Nome": info[1],
+                    "Cpf": info[2],
+                    "Email": info[3],
+                    "Data": info[4],
+                    "Numero": info[5],
+                    "Sexo": info[6],
+                    "Cargo": info[7]
+                })
+                response.status_code = 200
+                return response
 
             else:
-                return jsonify({
-                "AcessToken": "acesso negado"
-                }), 401
+                # cria uma resposta com status 400 (Bad Request) e retorna uma mensagem de erro em formato JSON
+                response = jsonify({"AccessToken": "Acesso negado"})
+                response.status_code = 400
+                return response
                 
-            
-            # return redirect(login)
+        @self.servidor.route('/Validation')
+        @jwt_required
+        def Validation():
+            try:
+                token = request.headers.get('Authorization')
+                decoded_token = jwt.decode(token, 'bagriel51', algorithms=['HS256'])
+                user = decoded_token['user']
+                info = classeBD.id_user(user)
+                return jsonify({
+                    'AccessToken': token,
+                    "id": info[0],
+                    "Nome": info[1],
+                    "Cpf": info[2],
+                    "Email": info[3],
+                    "Data": info[4],
+                    "Numero": info[5],
+                    "Sexo": info[6],
+                    "Cargo": info[7]
+                })
+            except jwt.InvalidTokenError:
+                print("Token inválido")
+
         #----------------------------------------------rota de serviços-----------------------------------------------
 
         @self.servidor.route('/adicionarProjeto', methods=['POST'])
@@ -93,35 +123,13 @@ class ServidorApp():
                         "Data": i[4],
                         "Numero": i[5],
                         "Sexo": i[6],
-                        "Cargo": i[7]  
+                        "Cargo": i[7]
                     } 
                     ]                       
                 )
-            
             try:
                 return tabelaFormatada
-            except TypeError:
-                return Response('Missing parameter', status=400)
-            
-        @self.servidor.route("/informacoesDoUsuario", methods=['POST'])
-        #@jwt_required
-        def InfoUser():
-            
-            req = request.get_json()
-            id = req['id']
-            info = classeBD.InfoUser(id)
-            try:
-                return jsonify({
-                    "id": info[0],
-                        "Nome": info[1],
-                        "Cpf": info[2],
-                        "Email": info[3],
-                        "Data": info[4],
-                        "Numero": info[5],
-                        "Sexo": info[6],
-                        "Cargo": info[7],
-                })
-            except TypeError:
+            except:
                 return Response('Missing parameter', status=400)
                 
                 
@@ -144,8 +152,7 @@ class ServidorApp():
 
             return resultado
 
-        #---------------------------------------------rota de recuperaçao de senha--------------------------------------
-
+        #---------------------------------------------rotas de recuperaçao de senha--------------------------------------
 
         @self.servidor.route('/pega_email_sms', methods = ['POST'])
         # @jwt_required()
@@ -169,17 +176,15 @@ class ServidorApp():
             status = enviar_email(email, codigo)
             return status
 
-        @self.servidor.route('/envia_sms', methods = ['POST'])
+        #@self.servidor.route('/envia_sms', methods = ['POST'])
         #@jwt_required()
-        def envia_sms():
+        #def envia_sms():
             dados = request.get_json()
             tel = dados['telefone']
             codigo = dados['codigo']
             status = sendMsg(tel,codigo)
             print(status)
             return Response('Missing parameter', status=400)
-
-
 
         #---------------------------------------------rota de mostrar serviços-------------------------------------------
         @self.servidor.route("/listaDeServicos")
@@ -189,67 +194,78 @@ class ServidorApp():
             
             TabelaServicos = classeBD.Servicos()
             TabelaServicos
-            return jsonify(
-                {
-                    "Servicos": TabelaServicos
-                }
-            )
-        
+            return TabelaServicos
+        #---------------------------------------------rota de Agenda-----------------------------------------------------
         @self.servidor.route("/Agenda", methods = ["GET", "POST"])
         # @jwt_required()
         def buscAgenda():
             dia = request.get_json()
             dia = dia['dia']
             TabelaServicos = classeBD.Agenda(dia)
-            print(TabelaServicos)
+            if TabelaServicos == None:
+                return make_response(Response(status=400))
             return TabelaServicos
          
 
-
+        #---------------------------------------------rota de chat-------------------------------------------
         @self.servidor.route("/chat", methods=["POST", 'GET'])
         # @jwt_required()
         def Chat():
             dic = {}
             if request.method == 'POST':
                 bodyMessage = request.get_json()
-                mensagem = bodyMessage['msg']
-                usuario = bodyMessage['user']
+                mensagem = bodyMessage['Msgs']
+                usuario = bodyMessage['Nome']
                 agora = dt.datetime.now()
                 dataFormatada = agora.strftime("%Y-%m-%d %H:%M:%S")
                 resultado = classeBD.EnviaMensagem(usuario, mensagem, dataFormatada) 
                 chat = classeBD.ChatGeral()
-                j=1
+                if chat != None:
+                    chat1 = []
+                    for i in chat:
+                        chat1.append(
+                            [
+                                {
+                                    "id": i[0],
+                                    "Nome": i[1],
+                                    "Msgs": i[2],
+                                    "Horario": i[3]
+                                }
+                            ]
+                        )
+                    return chat1
+                else: return make_response(Response(status=400))
+            
+            chat = classeBD.ChatGeral()
+            print(chat)
+            if chat != None:
+                chat1 = []
                 for i in chat:
-                    chave = f'Mensagem{j}'
-                    valor = [i[0],i[1],i[2]]
-                    dic[chave] = valor
-                    j+=1
-                return resultado
-                
-            else:
-                chat = classeBD.ChatGeral()
-                j=1
-                for i in chat:
-                    chave = f'Mensagem{j}'
-                    valor = [i[0],i[1],i[2]]
-                    dic[chave] = valor
-                    j+=1
-                return dic
-            return dic
-         
+                    chat1.append(
+                        [
+                            {
+                                "id": i[0],
+                                "Nome": i[1],
+                                "Msgs": i[2],
+                                "Horario": i[3]
+                            }
+                        ]
+                    )
+                return chat1
+            return make_response(Response(status=400))
+        
+        #---------------------------------------------rota para alterar a senha-------------------------------------------
         @self.servidor.route("/NovaSenha", methods=['POST'])
         def novaSenha():
-            try:
-                dados = request.get_json()
-                cpf = dados['cpf']
-                senha = dados['senha']
-                Senha = jwt.encode({'senha': senha}, "senha-padrão", algorithm='HS256')
-                print(Senha)
-                sstatus = classeBD.alterarSenha(cpf, Senha)
-                return Response(status=sstatus)
-            except: 
-                return Response(status=sstatus)
-               
+            dados = request.get_json()
+            cpf = dados['cpf']
+            senha = dados['senha']
+            #Senha = jwt.encode({'senha': senha}, "senha-padrão", algorithm='HS256')
+            sstatus = classeBD.alterarSenha(cpf, senha)
+            if sstatus: return make_response(Response(status=200))
+            return make_response(Response(status=400))
+             
+        #---------------------------------------------rota para receber imagem-------------------------------------------
         @self.servidor.route('/uploadImage', methods=['POST'])
         def upload_file():
             
@@ -268,25 +284,55 @@ class ServidorApp():
 
             return {'message': 'Arquivo enviado com sucesso'}
         
-        # @self.servidor.route('/sendImagePerfil', methods = ['POST'])
-        # def sendImagePerfil():
-        #     id = request.get_json()
-        #     id = id['id']
+        #---------------------------------------------rota para buscar imagem-------------------------------------------
+        @self.servidor.route('/sendImagePerfil', methods = ['POST'])
+        def sendImagePerfil():
+            id = request.get_json()
+            id = id['id']
+            print(id)
+            image = classeBD.SendImage(id)
 
-        #     image = classeBD.SendImage(id)
+            if image:
+                image_data = image[0]
 
-        #     if image:
-        #         image_data = image[0]
+                # Cria um objeto BytesIO para armazenar a imagem como um fluxo de bytes
+                img_io = BytesIO(image_data)
 
-        #         # Cria um objeto BytesIO para armazenar a imagem como um fluxo de bytes
-        #         img_io = BytesIO(image_data)
+                # Define os cabeçalhos HTTP para a resposta
+                response = make_response(img_io.getvalue())
+                response.headers.set('Content-Type', 'image/jpeg')
+                response.headers.set('Content-Disposition', 'attachment', filename='image.jpg')
 
-        #         # Define os cabeçalhos HTTP para a resposta
-        #         response = make_response(img_io.getvalue())
-        #         response.headers.set('Content-Type', 'image/jpeg')
-        #         response.headers.set('Content-Disposition', 'attachment', filename='image.jpg')
+                return response
+            return Response(status=401)
 
-        #         return response
-        #     return Response(status=400)
+        #---------------------------------------------rota para editar dados-------------------------------------------
+        
+        @self.servidor.route("/editData", methods = ["POST"])
+        def editData():
+            json = request.get_json()
+            cpf = json['cpf']
+            email = json['email']
+            telefone = json['telefone']
+            sexo = json['sexo']
+            cargo = json['cargo']
+            status = classeBD.UpdateData(cpf,email,telefone,sexo,cargo)
+            if status: return make_response(Response(status=200))
+            return make_response(Response(status=400))
+        
+        #---------------------------------------------rota de suporte--------------------------------------------------
+        @self.servidor.route('/suporteForms', methods= ['POST'])
+        def suporteForms():
+            req = request.get_json()
+            nome = req['nome']
+            email = req['email']
+            tel = req['tel']
+            cargo = req['cargo']
+            motivo = req['motivo']
+            mensagem = req['mensagem']
+            email_sup = 'luigiskyline4@gmail.com'
+            msg = envia_email_form(email_sup,nome, email,tel,cargo, motivo, mensagem)
+            return make_response(Response(status=200))
+        
         self.servidor.run(host="0.0.0.0", debug=True)
         

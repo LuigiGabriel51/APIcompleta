@@ -1,4 +1,5 @@
 from twilio.rest import Client
+import twilio
 
 def sendMsg(numero, codigo):
 
@@ -17,6 +18,7 @@ def sendMsg(numero, codigo):
             body=f'Olá, seu código de verificação é: {codigo}!',
             from_=twilio_phone_number,
             to= f"+55{numero}"
-        )
+            )
         return 200
-    except: return "erro"
+    except (twilio.base.exceptions.TwilioRestException): return "erro no servidor"
+

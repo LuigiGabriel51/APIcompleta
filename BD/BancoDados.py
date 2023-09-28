@@ -11,10 +11,10 @@ cursor = conexao.cursor()
 def Login( cpf, senhaT):
     try:
         #senha = jwt.encode({'senha': senhaT}, "senha-padrão", algorithm='HS256')
-        cursor.execute(f"SELECT ID FROM dadosfuncionarios WHERE CPF='{cpf}' AND SENHA='{senhaT}'")
+        cursor.execute(f"SELECT * FROM dadosfuncionarios WHERE CPF='{cpf}' AND SENHA='{senhaT}'")
         result = cursor.fetchone()
         if result:       
-            return result[0]
+            return result
     except: 
         return 0
 
@@ -27,6 +27,16 @@ def criarProjeto(nome, integrantes):
         return "Projeto criado com sucesso!"
     except:
         return f"Erro ao criar projeto"
+
+def criaFase(ID_Projeto, Nome, Descricao, Data_Inicio, DURACAO):
+    try:
+        cursor.execute(
+            f"INSERT INTO fase (ID_Projeto, Nome, Descricao, Data_Inicio, DURACAO) VALUES ('{ID_Projeto}', '{Nome}', '{Descricao}', '{Data_Inicio}', '{DURACAO}')",
+        )
+        conexao.commit()
+        return "Fase criado com sucesso!"
+    except:
+        return "Erro ao criar Fase"
 
 def Funcionarios():
     cursor.execute("SELECT * FROM dadosfuncionarios")
@@ -78,27 +88,45 @@ def Servicos():
 def Agenda(dia):
     cursor.execute(f"SELECT * FROM agenda WHERE dia = '{dia}' ")
     result = cursor.fetchall()
-    agenda_dict = {}
+    if len(result) == 0:
+        return None 
+    Lista = []
     for item in result:
-        agenda_dict['Nome'] = item[0]
-        agenda_dict['dia'] = item[1]
-        agenda_dict['horario'] = item[2]
-        agenda_dict['descricao'] = item[3]
-    return json.dumps(agenda_dict)
+        Lista.append({
+            "Nome": item[0],
+            "dia": item[1],
+            "horario": item[2],
+            "descricao": item[3]
+        })
+    return Lista
+
+def AddAgenda(Nome, dia, horario, descricao):
+    try:
+        cursor.execute(
+            f"INSERT INTO agenda (Nome, dia, horario, descricao) VALUES ('{Nome}', '{dia}', '{horario}', '{descricao}')",
+        )
+        conexao.commit()
+        return "agendado!"
+    except:
+        return "Erro ao agendar"
 
 def alterarSenha(cpf , senha):
     try:
-        status = cursor.execute(f"UPDATE dadosfuncionarios SET SENHA = '{senha}' WHERE CPF = '{cpf}'")
+        cursor.execute(f"UPDATE dadosfuncionarios SET SENHA = '{senha}' WHERE CPF = '{cpf}'")
+        rows_affected = cursor.rowcount
         conexao.commit()
-
-
-        return 200
-    except: 
-        return 400
+        if rows_affected > 0:
+            return True
+        else:
+            return False
+    except Exception as e:
+        print(f"Ocorreu um erro: {e}")
+        return False
+    
     
 def SaveImage(id, imagem):
     print(id)
-    cursor.execute(f"UPDATE dadosfuncionarios SET PERFIL = %s WHERE ID = %s", (imagem, id))
+    cursor.execute(f"UPDATE dadosfuncionarios SET PERFIL = ? WHERE ID = ?", (imagem, id))
     conexao.commit()
     result = cursor.fetchall()
     return result
@@ -106,5 +134,44 @@ def SaveImage(id, imagem):
 def SendImage(id):
     cursor.execute(f"SELECT PERFIL FROM dadosfuncionarios WHERE ID={id}")
     result = cursor.fetchone()
+    return result
 
+def id_user(id):
+    try:
+        cursor.execute(f"SELECT * FROM dadosfuncionarios WHERE ID={id}")
+        result = cursor.fetchone()
+        if result:       
+                return result
+    except: 
+        return 0
+
+def UpdateData(cpf, email, telefone, sexo, cargo):
+    try:
+        cursor.execute(f"UPDATE dadosfuncionarios SET EMAIL = '{email}', TELEFONE = '{telefone}', SEXO = '{sexo}', CARGO = '{cargo}' WHERE CPF = '{cpf}'")
+        rows_affected = cursor.rowcount
+        if rows_affected > 0:
+                return True
+        else:
+            return False
+    except Exception as e:
+        print(f"Ocorreu um erro: {e}")
+        return False
+def EnviaMensagem(usuario, *args):
+    try:
+        cursor.execute(
+            f"INSERT INTO chat (nome, msg, horario) VALUES ('{usuario}', '{args[0]}', '{args[1]}')",
+        )
+        conexao.commit()
+        cursor.execute(f"SELECT * FROM chat WHERE id={usuario}")
+        result = cursor.fetchone()
+        return result
+    except:
+        return 200
+def ChatGeral():
+    cursor.execute(f"SELECT * FROM chat")
+    result = cursor.fetchall()
+
+    res = []
+    for i in result:
+        res.append([i[1],i[2],i[3]])
     return result
