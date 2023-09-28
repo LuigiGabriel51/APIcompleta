@@ -11,7 +11,7 @@ def enviar_email(eemail, codigo):
     msg['Subject'] = "Recuperação de Senha"
     msg['From'] = 'luigiskyline4@gmail.com'
     msg['To'] = f'{eemail}'
-    password = 'rzdrwbvgjgbudmko' 
+    password = 'pqzvhibekrcybyfd' 
     msg.add_header('Content-Type', 'text/html')
     msg.set_payload(corpo_email )
 

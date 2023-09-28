@@ -1,6 +1,6 @@
+import json
 from flask import Flask, make_response,request, jsonify, Response
 from FuncsApi.EmailAutomatico import enviar_email, envia_email_form
-from FuncsApi.SMSautomatico import sendMsg
 from functools import wraps
 import jwt 
 import datetime as dt
@@ -9,7 +9,7 @@ import BD.BancoDados as classeBD
 from io import BytesIO
 
 
-
+# criar rota de de lista de funcionarios no projeto & rota da imagem do projeto
 class ServidorApp():
 
     def __init__(self):
@@ -18,7 +18,7 @@ class ServidorApp():
         self.gerenciadorLogin.init_app(self.servidor)
         self.servidor.config["SECRET_KEY"] = "senha-padrão"
 
-    def InicializaServidor(self):
+    def Inicialize(self):
         def jwt_required(f):
             @wraps(f)
             def decorated(*args, **kwargs):
@@ -136,7 +136,7 @@ class ServidorApp():
         #-----------------------------------------------rota de registro-----------------------------------------------
 
         @self.servidor.route('/registro', methods=['POST'])
-        #@jwt_required()
+        #@jwt_required
         def registro():
             
             requisicao = request.get_json()
@@ -155,7 +155,7 @@ class ServidorApp():
         #---------------------------------------------rotas de recuperaçao de senha--------------------------------------
 
         @self.servidor.route('/pega_email_sms', methods = ['POST'])
-        # @jwt_required()
+        # @jwt_required
         def pega_email_sms():
             
             dados = request.get_json()
@@ -168,7 +168,7 @@ class ServidorApp():
                 })  
                 
         @self.servidor.route('/envia_email', methods = ['POST'])
-        #@jwt_required()
+        #@jwt_required
         def envia_email():
             dados = request.get_json()
             email = dados['email']
@@ -188,16 +188,16 @@ class ServidorApp():
 
         #---------------------------------------------rota de mostrar serviços-------------------------------------------
         @self.servidor.route("/listaDeServicos")
-        # @jwt_required()
+        # @jwt_required
         def verServicos():
-            
-            
-            TabelaServicos = classeBD.Servicos()
-            TabelaServicos
+            id = request.args.get('id')
+            if id == None:
+                return make_response(Response(status=403))
+            TabelaServicos = classeBD.Servicos(id)
             return TabelaServicos
         #---------------------------------------------rota de Agenda-----------------------------------------------------
         @self.servidor.route("/Agenda", methods = ["GET", "POST"])
-        # @jwt_required()
+        # @jwt_required
         def buscAgenda():
             dia = request.get_json()
             dia = dia['dia']
@@ -209,7 +209,7 @@ class ServidorApp():
 
         #---------------------------------------------rota de chat-------------------------------------------
         @self.servidor.route("/chat", methods=["POST", 'GET'])
-        # @jwt_required()
+        # @jwt_required
         def Chat():
             dic = {}
             if request.method == 'POST':
@@ -286,6 +286,7 @@ class ServidorApp():
         
         #---------------------------------------------rota para buscar imagem-------------------------------------------
         @self.servidor.route('/sendImagePerfil', methods = ['POST'])
+        #@jwt_required
         def sendImagePerfil():
             id = request.get_json()
             id = id['id']
@@ -334,5 +335,63 @@ class ServidorApp():
             msg = envia_email_form(email_sup,nome, email,tel,cargo, motivo, mensagem)
             return make_response(Response(status=200))
         
-        self.servidor.run(host="0.0.0.0", debug=True)
+        @self.servidor.route("/ListaFuncionariosProjeto", methods= ['POST'])
+        def listFuncionarios():
+            projeto = request.get_json()
+            idProjto = projeto["ID"]
+            funcionarios = classeBD.FuncionarioProjetos(idProjto)
+            
+            return funcionarios
+
+        @self.servidor.route('/uploadImageProjeto', methods=['POST'])
+        def uploadImageProjeto():
+            
+            
+            if 'file' not in request.files:
+                return {'error': 'Nenhum arquivo enviado'}
+
+            file = request.files['file']
+            id = request.form['id']
+            image = file.read()
+            
+            if file.filename == '':
+                return {'error': 'O arquivo não possui um nome válido'}
+            
+            res = classeBD.UpdateImageProjeto(id, image)
+
+            return {'message': 'Arquivo enviado com sucesso'}
+
+        @self.servidor.route('/sendImageProjeto', methods = ['POST'])
+        #@jwt_required
+        def sendImageProjeto():
+            id = request.get_json()
+            id = id['id']
+            print(id)
+            image = classeBD.GetImageProjeto(id)
+
+            if image:
+                image_data = image[0]
+
+                # Cria um objeto BytesIO para armazenar a imagem como um fluxo de bytes
+                img_io = BytesIO(image_data)
+
+                # Define os cabeçalhos HTTP para a resposta
+                response = make_response(img_io.getvalue())
+                response.headers.set('Content-Type', 'image/jpeg')
+                response.headers.set('Content-Disposition', 'attachment', filename='image.jpg')
+
+                return response
+            return Response(status=401)
         
+        @self.servidor.route('/UpdateEmail', methods = ['POST'])
+        #@jwt_required
+        def UpdateEmail():
+            dados = request.get_json()
+            NovoEmail = dados['email']
+            id = dados['id']
+            state = classeBD.UpdateEmail(NovoEmail, id)
+            if state: 
+                return make_response(Response(status=200))
+            return make_response(Response(status=401))
+        
+        self.servidor.run(host="0.0.0.0", debug=True)

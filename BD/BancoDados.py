@@ -68,21 +68,41 @@ def RECemail( cpf):
     else:
         return -1
 
-def Servicos():
-    cursor.execute("SELECT * FROM projetos")
+def Servicos(id):
+    cursor.execute(f"SELECT * FROM projetos WHERE ID = {id}")
     projetos = cursor.fetchall()
-    cursor.execute("SELECT * FROM fase")
+    cursor.execute(f"SELECT * FROM fase WHERE ID_Projeto = {id}")
     fases = cursor.fetchall()
     
     projetos_fases = {}
     for projeto in projetos:
-        id_projeto = projeto[0] # altere aqui o índice para corresponder à posição da coluna 'ID' na tabela 'projetos'
+        id_projeto = projeto[0] # Altere aqui o índice para corresponder à posição da coluna 'ID' na tabela 'projetos'
         nome_projeto = projeto[1]
-        projetos_fases[nome_projeto] = []
+        stringIntegrantes = projeto[2]
+        status = projeto[3]
+        image_projeto = str(projeto[4])
+        ListIntegrantes = [int(numero) for numero in stringIntegrantes.split(',')]
+        Integrantes = []
+
+        for IDintegrante in ListIntegrantes:
+            print(IDintegrante)
+            cursor.execute(f"SELECT NOME FROM dadosfuncionarios WHERE ID = {IDintegrante}")
+            integrante = cursor.fetchall()
+            Integrantes.append(integrante)
+
+        projetos_fases['PROJETO'] = {'nome': nome_projeto, 'integrantes': Integrantes,'fases': [], 'status': status, 'image': image_projeto}
         for fase in fases:
-            if fase[1] == id_projeto: # altere aqui o índice para corresponder à posição da coluna 'id_projeto' na tabela 'fase'
-                projetos_fases[nome_projeto].append(fase)
-    
+            if fase[1] == id_projeto: # Altere aqui o índice para corresponder à posição da coluna 'id_projeto' na tabela 'fase'
+                projeto_fase = {
+                    'id': fase[0],
+                    'id_projeto': fase[1],
+                    'nome_fase': fase[2],
+                    'descricao_fase': fase[3],
+                    'data_inicio': fase[4],
+                    'valor': fase[5],
+                    'concluido': fase[6]
+                }
+                projetos_fases['PROJETO']['fases'].append(projeto_fase)
     return projetos_fases
 
 def Agenda(dia):
@@ -175,3 +195,39 @@ def ChatGeral():
     for i in result:
         res.append([i[1],i[2],i[3]])
     return result
+def UpdateImageProjeto(id, image):
+        cursor.execute("UPDATE projetos SET Image = ? WHERE ID = ?", (image, id))
+        conexao.commit()
+        result = cursor.fetchall()
+        return result  
+def GetImageProjeto(id):
+    cursor.execute(f"SELECT Image FROM projetos WHERE ID= {id}")
+    result = cursor.fetchone()
+    return result
+def FuncionarioProjetos(id):
+    funcionarios = cursor.execute(f"SELECT id_integrante FROM projetos WHERE ID= {id}")
+    funcionarios = cursor.fetchall()
+    string_com_numeros = funcionarios[0][0]  # Obter o valor da tupla
+
+    funcionariosInt = string_com_numeros.split(',')
+    funcionariosInt = [int(numero) for numero in funcionariosInt]
+
+    listFunc = []
+    for i in funcionariosInt:
+        cursor.execute(f"SELECT NOME FROM dadosfuncionarios WHERE ID={i}")
+        user = cursor.fetchall()
+        if user:  # Verifica se a lista user não está vazia
+            nome = user[0][0]  # Acessa o nome na primeira tupla da primeira lista
+            listFunc.append(nome)
+    return listFunc
+def UpdateEmail(NovoEmail, ID):
+    cursor.execute(f"""UPDATE dadosfuncionarios
+                      SET EMAIL = '{NovoEmail}'
+                      WHERE ID = {ID};""")
+    rows_affected = cursor.rowcount
+    conexao.commit()
+    if rows_affected > 0:
+        return True
+    else:
+        return False
+    
